@@ -2331,5 +2331,11 @@
     "resource/image/UI/Item/item_ticketgacha_beginner_ten": "43a6eeff3c48813cf84c90dba047b320ee6cee25eeb34a2ec7fa58f9714a3559",
     "resource/image/UI/Item/item_plant_tundra_insect_2": "a6ec9172821f66962b2fa50c42b42ae8c82582bd53eb6a2560a29daef7f665ad",
     "resource/image/UI/Item/item_plant_tundra_insect_1": "bbe9e2f9453c0ceb994bdf5b2acb656ab274e39aefab6fb0473fee4431eb938a",
-    "resource/image/UI/Item/item_muck_feces_1": "ef74e8ee86603dfd873c302fca0c3e6816f62814e83d198e8a2dc7dd54645878"
+    "resource/image/UI/Item/item_muck_feces_1": "ef74e8ee86603dfd873c302fca0c3e6816f62814e83d198e8a2dc7dd54645878",
+    "resource/image/TrialOfSwordmancy/DoubleRewardButton": "422bb77719c93efda7eed9677b9c7ba4c7c77ab5a9423a087491ef5d00c8ab38",
+    "resource/image/TrialOfSwordmancy/AbandonButtonNormal": "c30564332c3d5443de8b27675cc797dea7c99510518f8ab51ff50bd9b4e6953c",
+    "resource/image/TrialOfSwordmancy/AbandonButtonHover": "3b5f804a93a402d5534c62337f8995ee16ebe60c5dd9422c935a29af414dc8fa",
+    "resource/image/TrialOfSwordmancy/StartTrialButton": "33c5bf10afa68b6288731dc70843601d74d90d2c55fab47c1aa7ba0e863a747c",
+    "resource/image/TrialOfSwordmancy/DrawCardButton": "ecec9442fd5f819bae8e461bcb3f5e45d0b3b7d7edb870e5087f53e1bad8a12f",
+    "resource/image/TrialOfSwordmancy/TrialTrigger": "2bf9939b0e557db9224582e8727be4f0aa90680ad3fd7f8ff4928e2dc9981933"
 }
