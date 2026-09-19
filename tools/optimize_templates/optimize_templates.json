@@ -2347,5 +2347,8 @@
     "resource/image/UI/Item/item_fbottle_glass_grass_1": "716fd393615d9c6a6fb096a358c24d5b1b3582385855fea7ddcff397fcb0234b",
     "resource/image/UI/Item/item_spaceship_exhibits_universe": "acac6381e5dff87a084ef16cb0f6c134cac9d7265d02b9f4669feacd51addba9",
     "resource/image/UI/Item/wpn_sword_0020": "55333628bf9d78cc4afcda7be52ad268bb4bbbd6c675da806cc964adfaecbeef",
-    "resource/image/UI/Item/item_ticketgacha_beginner_ten": "43a6eeff3c48813cf84c90dba047b320ee6cee25eeb34a2ec7fa58f9714a3559"
+    "resource/image/UI/Item/item_ticketgacha_beginner_ten": "43a6eeff3c48813cf84c90dba047b320ee6cee25eeb34a2ec7fa58f9714a3559",
+    "resource/image/UI/Item/item_plant_tundra_insect_2": "a6ec9172821f66962b2fa50c42b42ae8c82582bd53eb6a2560a29daef7f665ad",
+    "resource/image/UI/Item/item_plant_tundra_insect_1": "bbe9e2f9453c0ceb994bdf5b2acb656ab274e39aefab6fb0473fee4431eb938a",
+    "resource/image/UI/Item/item_muck_feces_1": "ef74e8ee86603dfd873c302fca0c3e6816f62814e83d198e8a2dc7dd54645878"
 }
