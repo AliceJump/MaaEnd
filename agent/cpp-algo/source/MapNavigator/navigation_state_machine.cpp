@@ -559,10 +559,8 @@ void NavigationStateMachine::UpdateDwellWatchdog(bool captured)
     }
 
     const auto now = std::chrono::steady_clock::now();
-    const bool zone_changed =
-        !dwell.center_zone.empty() && !position_->zone_id.empty() && dwell.center_zone != position_->zone_id;
-    if (!dwell.latched || zone_changed
-        || std::hypot(position_->x - dwell.center_x, position_->y - dwell.center_y) > kDwellWatchdogRadius) {
+    const bool zone_changed = !dwell.center_zone.empty() && !position_->zone_id.empty() && dwell.center_zone != position_->zone_id;
+    if (!dwell.latched || zone_changed || std::hypot(position_->x - dwell.center_x, position_->y - dwell.center_y) > kDwellWatchdogRadius) {
         dwell.latched = true;
         dwell.center_x = position_->x;
         dwell.center_y = position_->y;
@@ -1289,8 +1287,8 @@ bool NavigationStateMachine::TickNavigate()
         // 索边卡死跟自救超时同一个处置: 先退索走路, 别直接判导航失败。退链后给盘重新计时,
         // 手上已经是走路点, 再攒满那一次才是真失败。
         if (pinned_at.action == ActionType::ZIPLINE) {
-            LogWarn << "Dwell watchdog tripped at a zipline tower; dropping the chain and walking."
-                    << VAR(runtime_state_.dwell.dwell_ms) << VAR(position_->x) << VAR(position_->y);
+            LogWarn << "Dwell watchdog tripped at a zipline tower; dropping the chain and walking." << VAR(runtime_state_.dwell.dwell_ms)
+                    << VAR(position_->x) << VAR(position_->y);
             semantic_nodes::AbandonZipline(
                 BuildSemanticContext(
                     action_wrapper_,
@@ -1307,8 +1305,8 @@ bool NavigationStateMachine::TickNavigate()
             return true;
         }
         LogError << "Dwell watchdog tripped; the agent never left its dwell radius." << VAR(runtime_state_.dwell.dwell_ms)
-                 << VAR(runtime_state_.dwell.center_x) << VAR(runtime_state_.dwell.center_y) << VAR(position_->x)
-                 << VAR(position_->y) << VAR(session_->current_node_idx());
+                 << VAR(runtime_state_.dwell.center_x) << VAR(runtime_state_.dwell.center_y) << VAR(position_->x) << VAR(position_->y)
+                 << VAR(session_->current_node_idx());
         return FailNavigation(
             "dwell_watchdog",
             "Agent stayed inside the dwell radius past the watchdog budget; terminating so the pipeline can retry.",
