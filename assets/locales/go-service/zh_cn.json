@@ -177,6 +177,7 @@
     "tasker.task_failed_feedback_hint.after_link": " 或在设置-关于-用户群进行反馈。",
     "tasker.process_warning.title": "⚠️ 注意：检测到以下进程正在运行",
     "tasker.process_warning.recommend_1": "ℹ️ 这些程序会影响任务运行",
+    "tasker.process_warning.recommend_rtss": "ℹ️ 开启 OSD 会影响屏幕识别，导致任务失败",
     "tasker.aspect_ratio_warning.title": "🚨 警告：分辨率不符合要求！🚨",
     "tasker.aspect_ratio_warning.stopped": "🚫 任务已强制停止",
     "tasker.aspect_ratio_warning.desc": "💡 请调整分辨率后重新运行任务。",

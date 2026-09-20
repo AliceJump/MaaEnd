@@ -176,6 +176,7 @@
     "tasker.task_failed_feedback_hint.after_link": " するか、設定 - このアプリについて - ユーザーグループからお願いします。",
     "tasker.process_warning.title": "⚠️ 注意：次のプロセスが実行中です",
     "tasker.process_warning.recommend_1": "ℹ️ これらのプログラムはタスクの実行に影響します",
+    "tasker.process_warning.recommend_rtss": "ℹ️ OSD を有効にすると画面認識に影響し、タスクが失敗する可能性があります",
     "tasker.aspect_ratio_warning.title": "🚨 警告：解像度が要件を満たしていません！🚨",
     "tasker.aspect_ratio_warning.stopped": "🚫 タスクを強制停止しました",
     "tasker.aspect_ratio_warning.desc": "💡 解像度を調整してから再実行してください。",
