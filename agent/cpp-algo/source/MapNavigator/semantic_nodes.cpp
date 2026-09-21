@@ -382,8 +382,8 @@ void AlignCameraToCharacterOnce(const Context& ctx)
             camera_after = *ctx.position->camera_angle;
         }
     }
-    LogInfo << "Camera aligned to character heading." << VAR(character_heading) << VAR(camera_before) << VAR(delta)
-            << VAR(camera_after) << VAR(character_after);
+    LogInfo << "Camera aligned to character heading." << VAR(character_heading) << VAR(camera_before) << VAR(delta) << VAR(camera_after)
+            << VAR(character_after);
 }
 
 bool CaptureStableHeading(const Context& ctx, double* out_heading)
