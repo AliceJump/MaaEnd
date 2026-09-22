@@ -4,7 +4,14 @@
             "name": "SeizeDeliveryJobs",
             "description": "$task.SeizeDeliveryJobs.description",
             "label": "$task.SeizeDeliveryJobs.label",
-            "entry": "SeizeDeliveryJobsMain",
+            "entry": "SeizeDeliveryJobsCheckOngoingJob",
+            "pipeline_override": {
+                "AutoDeliveryDeliveryMissionNotFound": {
+                    "anchor": {
+                        "SeizeDeliveryJobsAfterMissionListExhausted": "SeizeDeliveryJobsNoOngoingJob"
+                    }
+                }
+            },
             "option": [
                 "SeizeDeliveryJobsReward",
                 "SeizeDeliveryJobsRefreshLimit",
@@ -333,6 +340,7 @@
                         "SeizeDeliveryJobsPostProcessingEntry": {
                             "enabled": true,
                             "next": [
+                                "SeizeDeliveryJobsGuard",
                                 "SeizeDeliveryJobsFullDelivery"
                             ]
                         }
