@@ -30,9 +30,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $home = 'https://endfield.hypergryph.com/'
-          $r = Invoke-WebRequest -UseBasicParsing -Uri $home -TimeoutSec 30
-          $base = [Uri]$home
+          $siteUrl = 'https://endfield.hypergryph.com/'
+          $r = Invoke-WebRequest -UseBasicParsing -Uri $siteUrl -TimeoutSec 30
+          $base = [Uri]$siteUrl
           $scripts = [System.Collections.Generic.List[string]]::new()
           foreach ($m in [regex]::Matches($r.Content, '(?i)src=["'']([^"'']+\.js[^"'']*)["'']')) {
             try {
