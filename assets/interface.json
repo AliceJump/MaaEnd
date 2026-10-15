@@ -219,7 +219,6 @@
     "import": [
         // pretask
         "tasks/pretasks/GameSetting.json",
-        "tasks/pretasks/GameLaunch.json",
         // group: regional_development
         "tasks/OutpostTrading.json",
         "tasks/SeizeDeliveryJobs.json",

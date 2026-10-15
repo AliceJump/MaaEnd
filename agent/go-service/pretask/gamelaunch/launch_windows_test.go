@@ -150,7 +150,7 @@ func TestAlreadyRunning(t *testing.T) {
 	if len(ids) == 0 {
 		t.Skip("no running game; do not launch one in tests")
 	}
-	if !Run([]string{"invalid config is ignored when game already runs"}) {
+	if !Run(Options{}) {
 		t.Fatal("running game should skip all launch configuration")
 	}
 	if ready, err := gameWindowReady(ids[0]); err != nil {

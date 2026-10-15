@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func run(args []string) error {
+func run(opts Options) error {
 	// Windows mutex 归属 OS 线程；等待过程中 goroutine 不能迁移到其他线程。
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -30,7 +30,7 @@ func run(args []string) error {
 		return err
 	}
 	if state != windows.WAIT_OBJECT_0 && state != windows.WAIT_ABANDONED {
-		return errors.New("another GameLaunch pretask is running")
+		return errors.New("another game startup is in progress")
 	}
 	defer windows.ReleaseMutex(mutex)
 	ids, err := processIDs("Endfield.exe")
@@ -40,10 +40,6 @@ func run(args []string) error {
 	if len(ids) > 0 {
 		log.Info().Uints32("game_pids", ids).Msg("game is already running; skipping launch")
 		return nil
-	}
-	opts, err := parseOptions(args)
-	if err != nil {
-		return err
 	}
 	game, err := executablePath(opts.GamePath, "Endfield.exe")
 	if err != nil {

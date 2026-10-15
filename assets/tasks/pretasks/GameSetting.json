@@ -27,7 +27,10 @@
             "cases": [
                 {
                     "name": "CN",
-                    "label": "$option.GameSettingRegion.cases.CN.label"
+                    "label": "$option.GameSettingRegion.cases.CN.label",
+                    "option": [
+                        "GameSettingLaunchGame"
+                    ]
                 },
                 {
                     "name": "Global",
@@ -213,6 +216,42 @@
                 }
             ],
             "default_case": "Unchanged"
+        },
+        "GameSettingLaunchGame": {
+            "type": "switch",
+            "label": "$option.GameSettingLaunchGame.label",
+            "cases": [
+                {
+                    "name": "No",
+                    "label": "$option.GameSettingAutoHDR.cases.Disable.label"
+                },
+                {
+                    "name": "Yes",
+                    "label": "$option.GameSettingAutoHDR.cases.Enable.label",
+                    "option": [
+                        "GameLaunch"
+                    ]
+                }
+            ],
+            "default_case": "No"
+        },
+        "GameLaunch": {
+            "type": "input",
+            "label": "$option.GameLaunch.label",
+            "inputs": [
+                {
+                    "name": "GamePath",
+                    "label": "$option.GameLaunch.GamePath.label",
+                    "default": "",
+                    "pipeline_type": "string"
+                },
+                {
+                    "name": "LauncherPath",
+                    "label": "$option.GameLaunch.LauncherPath.label",
+                    "default": "",
+                    "pipeline_type": "string"
+                }
+            ]
         }
     }
 }

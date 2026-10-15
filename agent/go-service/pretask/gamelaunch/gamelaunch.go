@@ -1,7 +1,6 @@
 package gamelaunch
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -11,14 +10,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type launchOptions struct {
+// Options 是 GameSetting 预任务传入的国服官服游戏和启动器路径。
+type Options struct {
 	GamePath     string
 	LauncherPath string
 }
 
-// Run 在连接 Win32 控制器前启动国服官服；已有游戏进程时不重复启动。
-func Run(args []string) bool {
-	if err := run(args); err != nil {
+// Run 在游戏设置完成后启动国服官服；已有游戏进程时不重复启动。
+func Run(opts Options) bool {
+	if err := run(opts); err != nil {
 		event := log.Error().Err(err).Str("component", "gamelaunch")
 		var errno syscall.Errno
 		if errors.As(err, &errno) {
@@ -28,16 +28,6 @@ func Run(args []string) bool {
 		return false
 	}
 	return true
-}
-
-func parseOptions(args []string) (launchOptions, error) {
-	var opts struct{ GameLaunch launchOptions }
-	if len(args) > 0 {
-		if err := json.Unmarshal([]byte(args[len(args)-1]), &opts); err != nil {
-			return launchOptions{}, fmt.Errorf("parse GameLaunch options: %w", err)
-		}
-	}
-	return opts.GameLaunch, nil
 }
 
 func executablePath(path, name string) (string, error) {

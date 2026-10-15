@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MaaXYZ/MaaEnd/agent/go-service/pretask/gamelaunch"
 	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v4/process"
 )
@@ -31,13 +32,15 @@ const (
 var configuredRegion string
 
 type gameSettingOptions struct {
-	Region          string `json:"GameSettingRegion"`
-	Language        string `json:"GameSettingLanguage"`
-	DisplayType     string `json:"GameSettingDisplayType"`
-	Resolution      string `json:"GameSettingResolution"`
-	GraphicsQuality string `json:"GameSettingGraphicsQuality"`
-	FrameRate       string `json:"GameSettingFrameRate"`
-	AutoHDR         string `json:"GameSettingAutoHDR"`
+	Region          string             `json:"GameSettingRegion"`
+	Language        string             `json:"GameSettingLanguage"`
+	DisplayType     string             `json:"GameSettingDisplayType"`
+	Resolution      string             `json:"GameSettingResolution"`
+	GraphicsQuality string             `json:"GameSettingGraphicsQuality"`
+	FrameRate       string             `json:"GameSettingFrameRate"`
+	AutoHDR         string             `json:"GameSettingAutoHDR"`
+	LaunchGame      string             `json:"GameSettingLaunchGame"`
+	LaunchPaths     gamelaunch.Options `json:"GameLaunch"`
 }
 
 // Run 对应 assets/tasks/pretasks/GameSetting.json 的 pretask 入口。
@@ -53,6 +56,15 @@ func Run(args []string) bool {
 		return false
 	}
 
+	if opts.LaunchGame != "" && opts.LaunchGame != "No" && opts.LaunchGame != "Yes" {
+		log.Error().Str("component", "gamesetting").Str("launch_game", opts.LaunchGame).Msg("invalid game launch selection")
+		return false
+	}
+	if opts.LaunchGame == "Yes" && opts.Region != regionCN {
+		log.Error().Str("component", "gamesetting").Str("region", opts.Region).Msg("official launcher startup is only verified for CN")
+		return false
+	}
+
 	if _, _, err := mapTextLanguage(opts.Language); err != nil {
 		log.Error().
 			Err(err).
@@ -63,6 +75,10 @@ func Run(args []string) bool {
 	}
 
 	if isGameRunning() {
+		if opts.LaunchGame == "Yes" {
+			log.Info().Str("component", "gamesetting").Msg("game is already running; skipping settings and startup")
+			return true
+		}
 		log.Error().
 			Str("component", "gamesetting").
 			Msg("cannot apply game settings: game is running")
@@ -156,6 +172,9 @@ func Run(args []string) bool {
 		return false
 	}
 
+	if opts.LaunchGame == "Yes" {
+		return gamelaunch.Run(opts.LaunchPaths)
+	}
 	return true
 }
 

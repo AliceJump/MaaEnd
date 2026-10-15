@@ -4,6 +4,6 @@ package gamelaunch
 
 import "errors"
 
-func run(_ []string) error {
-	return errors.New("GameLaunch is only supported on Windows")
+func run(_ Options) error {
+	return errors.New("game startup is only supported on Windows")
 }
