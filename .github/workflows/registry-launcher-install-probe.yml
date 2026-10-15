@@ -14,7 +14,7 @@ permissions:
 jobs:
   install-and-probe:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -30,93 +30,101 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          # Current CN Endfield official site launcher endpoint, discovered from its live JS config.
           $url = 'https://launcher.hypergryph.com/launcher/latest/TKIVNurE23LREGRw?source=official'
-          $file = Join-Path $env:RUNNER_TEMP 'hypergryph-launcher-package.bin'
-          $resp = Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -PassThru -MaximumRedirection 10 -TimeoutSec 120
+          $file = Join-Path $env:RUNNER_TEMP 'HypergryphLauncherSetup.exe'
+          $resp = Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -PassThru -MaximumRedirection 10 -TimeoutSec 180
           "Final URL: $($resp.BaseResponse.RequestMessage.RequestUri.AbsoluteUri)"
           Get-Item $file | Format-List FullName,Length
-          $bytes = [IO.File]::ReadAllBytes($file)
-          if ($bytes.Length -lt 2) { throw 'Downloaded package is empty.' }
-          $installer = $null
-          if ($bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
-            $installer = Join-Path $env:RUNNER_TEMP 'HypergryphLauncherSetup.exe'
-            Move-Item -LiteralPath $file -Destination $installer -Force
-          } elseif ($bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B) {
-            $zip = Join-Path $env:RUNNER_TEMP 'HypergryphLauncher.zip'
-            Move-Item -LiteralPath $file -Destination $zip -Force
-            $dir = Join-Path $env:RUNNER_TEMP 'launcher-package'
-            Expand-Archive -Path $zip -DestinationPath $dir -Force
-            $installer = Get-ChildItem $dir -Recurse -File -Filter *.exe |
-              Sort-Object Length -Descending | Select-Object -First 1 -ExpandProperty FullName
-          } else {
-            throw ('Unknown package magic: {0:X2} {1:X2}' -f $bytes[0], $bytes[1])
-          }
-          if (-not $installer) { throw 'No launcher installer executable found.' }
-          $sig = Get-AuthenticodeSignature -LiteralPath $installer
+          $sig = Get-AuthenticodeSignature -LiteralPath $file
           $sig | Format-List Status,StatusMessage,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
           if ($sig.Status -ne 'Valid') { throw "Installer signature is not valid: $($sig.Status)" }
-          if ($sig.SignerCertificate.Thumbprint -notin @('2B366F397E64A9494A553B70004E8CA1AAE02B9D','FF4AF264C36A27F0C805936708EF8EC67B396225')) {
-            throw "Unexpected signer: $($sig.SignerCertificate.Thumbprint)"
-          }
-          "installer=$installer" >> $env:GITHUB_OUTPUT
+          if ($sig.SignerCertificate.Thumbprint -notin @('2B366F397E64A9494A553B70004E8CA1AAE02B9D','FF4AF264C36A27F0C805936708EF8EC67B396225')) { throw "Unexpected signer: $($sig.SignerCertificate.Thumbprint)" }
+          "installer=$file" >> $env:GITHUB_OUTPUT
 
-      - name: Install launcher silently
+      - name: Start installer and inspect actual registration
+        id: install
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
           $installer = '${{ steps.package.outputs.installer }}'
-          $key = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e'
-          function Has-Key {
-            foreach ($root in @('HKCU','HKLM')) { foreach ($view in @('64','32')) {
-              & reg.exe query "$root\$key" /v InstallLocation "/reg:$view" *> $null
-              if ($LASTEXITCODE -eq 0) { return $true }
-            }}
-            return $false
-          }
-          foreach ($args in @(@('/S'),@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'),@('/quiet','/norestart'))) {
-            if (Has-Key) { break }
-            "Trying installer args: $($args -join ' ')"
-            try {
-              $p = Start-Process -FilePath $installer -ArgumentList $args -PassThru
-              if (-not $p.WaitForExit(120000)) {
-                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-                'Installer timed out and was terminated.'
-              } else {
-                "Installer exit code: $($p.ExitCode)"
-              }
-            } catch { Write-Host $_ }
-            Start-Sleep -Seconds 3
-          }
-          if (-not (Has-Key)) { throw 'Launcher installation did not create the expected uninstall registration.' }
+          $expectedId = '33a0a6296a20400d503c59ac0fd6341e'
 
-      - name: Dump launcher registration
-        id: registry
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
-          $key = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e'
-          $found = $null
-          foreach ($root in @('HKCU','HKLM')) { foreach ($view in @('64','32')) {
-            "===== $root / reg:$view ====="
-            $out = & reg.exe query "$root\$key" "/reg:$view" 2>&1
-            $out
-            if ($LASTEXITCODE -eq 0 -and -not $found) {
-              $line = $out | Where-Object { $_ -match 'InstallLocation' } | Select-Object -First 1
-              if ($line -match 'REG_\w+\s+(.+)$') { $found = $Matches[1].Trim() }
+          function Find-LauncherRegistrations {
+            $rows = @()
+            foreach ($rootName in @('HKCU','HKLM')) {
+              foreach ($view in @('64','32')) {
+                $root = if ($rootName -eq 'HKCU') { [Microsoft.Win32.RegistryHive]::CurrentUser } else { [Microsoft.Win32.RegistryHive]::LocalMachine }
+                $rv = if ($view -eq '64') { [Microsoft.Win32.RegistryView]::Registry64 } else { [Microsoft.Win32.RegistryView]::Registry32 }
+                try {
+                  $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($root,$rv)
+                  $uninstall = $base.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Uninstall')
+                  if ($null -eq $uninstall) { continue }
+                  foreach ($name in $uninstall.GetSubKeyNames()) {
+                    try {
+                      $k = $uninstall.OpenSubKey($name)
+                      $display = [string]$k.GetValue('DisplayName','')
+                      $publisher = [string]$k.GetValue('Publisher','')
+                      $location = [string]$k.GetValue('InstallLocation','')
+                      $uninstallString = [string]$k.GetValue('UninstallString','')
+                      if ($name -eq $expectedId -or "$display $publisher $location $uninstallString" -match '(?i)(Hypergryph|鹰角|Launcher|终末地|Endfield)') {
+                        $rows += [pscustomobject]@{Root=$rootName;View=$view;Key=$name;DisplayName=$display;Publisher=$publisher;InstallLocation=$location;UninstallString=$uninstallString}
+                      }
+                      $k.Close()
+                    } catch {}
+                  }
+                  $uninstall.Close(); $base.Close()
+                } catch {}
+              }
             }
-          }}
-          if (-not $found) { throw 'InstallLocation not found after installation.' }
-          $launcher = Join-Path $found 'Launcher.exe'
+            return $rows
+          }
+
+          'Registrations before install:'
+          Find-LauncherRegistrations | Format-List
+
+          $p = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru
+          "Bootstrap PID: $($p.Id)"
+          if ($p.WaitForExit(30000)) { "Bootstrap exit code: $($p.ExitCode)" } else { 'Bootstrap still running after 30s.' }
+
+          $found = @()
+          for ($i = 0; $i -lt 18; $i++) {
+            Start-Sleep -Seconds 5
+            "--- probe $($i + 1), elapsed $((($i + 1) * 5))s ---"
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match '(?i)(hypergryph|launcher|setup)' -or $_.CommandLine -match '(?i)(hypergryph|launcher)' } |
+              Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine | Format-List
+            $found = @(Find-LauncherRegistrations)
+            if ($found.Count -gt 0) {
+              'Matching uninstall registrations:'
+              $found | Format-List
+              break
+            }
+          }
+
+          if ($found.Count -eq 0) {
+            'No matching uninstall registration after 90 seconds. Candidate Launcher.exe files:'
+            foreach ($base in @($env:LOCALAPPDATA,$env:APPDATA,$env:ProgramFiles,${env:ProgramFiles(x86)})) {
+              if (-not $base -or -not (Test-Path $base)) { continue }
+              Get-ChildItem -LiteralPath $base -Filter Launcher.exe -File -Recurse -ErrorAction SilentlyContinue |
+                Select-Object -First 20 FullName,Length | Format-List
+            }
+            throw 'Official installer did not create a discoverable launcher uninstall registration on this headless runner.'
+          }
+
+          $preferred = $found | Where-Object { $_.Key -eq $expectedId -and $_.InstallLocation } | Select-Object -First 1
+          if (-not $preferred) { $preferred = $found | Where-Object { $_.InstallLocation } | Select-Object -First 1 }
+          if (-not $preferred) { throw 'A matching registration exists but has no InstallLocation.' }
+          $launcher = Join-Path $preferred.InstallLocation 'Launcher.exe'
           if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Launcher.exe missing at $launcher" }
           $sig = Get-AuthenticodeSignature -LiteralPath $launcher
           $sig | Format-List Status,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
           if ($sig.Status -ne 'Valid') { throw "Installed Launcher.exe signature invalid: $($sig.Status)" }
           "launcher=$launcher" >> $env:GITHUB_OUTPUT
+          "registry_key=$($preferred.Root)/$($preferred.View)/$($preferred.Key)" >> $env:GITHUB_OUTPUT
 
       - name: Run MaaEnd registry integration test
         shell: pwsh
         working-directory: agent/go-service
         env:
-          MAAEND_TEST_LAUNCHER: ${{ steps.registry.outputs.launcher }}
+          MAAEND_TEST_LAUNCHER: ${{ steps.install.outputs.launcher }}
         run: go test ./pretask/gamelaunch -run 'TestLauncherPathFromInstallLocation|TestInstalledOfficialLauncherRegistration|TestOfficialLauncherSignature' -v
