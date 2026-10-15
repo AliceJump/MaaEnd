@@ -11,10 +11,17 @@ func TestLaunchRemainsOptIn(t *testing.T) {
 	}
 }
 
-func TestParseOptionalLaunchPaths(t *testing.T) {
-	opts, err := parseGameSettingOptions([]string{`{"GameSettingLaunchGame":"Yes","GameLaunch":{"GamePath":"D:\\Game Dir\\Endfield.exe","LauncherPath":"D:\\Launcher\\Launcher.exe"}}`})
-	if err != nil || opts.Region != regionCN || opts.LaunchGame != "Yes" || opts.LaunchPaths.GamePath != `D:\Game Dir\Endfield.exe` || opts.LaunchPaths.LauncherPath != `D:\Launcher\Launcher.exe` {
+func TestParseOptionalLaunchPath(t *testing.T) {
+	opts, err := parseGameSettingOptions([]string{`{"GameSettingLaunchGame":"Yes","GameLaunch":{"GamePath":"D:\\Game Dir\\Endfield.exe"}}`})
+	if err != nil || opts.Region != regionCN || opts.LaunchGame != "Yes" || opts.LaunchPaths.GamePath != `D:\Game Dir\Endfield.exe` {
 		t.Fatalf("unexpected settings with startup: %+v, %v", opts, err)
+	}
+}
+
+func TestLegacyLauncherPathIsIgnored(t *testing.T) {
+	opts, err := parseGameSettingOptions([]string{`{"GameSettingLaunchGame":"Yes","GameLaunch":{"GamePath":"D:\\Game\\Endfield.exe","LauncherPath":"D:\\Old\\Launcher.exe"}}`})
+	if err != nil || opts.LaunchPaths.GamePath != `D:\Game\Endfield.exe` {
+		t.Fatalf("legacy launcher path must not break parsing: %+v, %v", opts, err)
 	}
 }
 
