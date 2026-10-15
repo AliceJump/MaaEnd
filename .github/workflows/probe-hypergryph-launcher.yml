@@ -1,0 +1,159 @@
+name: Probe Hypergryph launcher registry
+
+on:
+  push:
+    branches:
+      - "codex/registry-official-launcher"
+    paths:
+      - ".github/workflows/probe-hypergryph-launcher.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Discover official launcher download
+        id: discover
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'https://endfield.hypergryph.com/'
+          $html = (Invoke-WebRequest -UseBasicParsing -Uri $root -TimeoutSec 30).Content
+          $texts = @($html)
+          $base = [Uri]$root
+          $scriptMatches = [regex]::Matches($html, '<script[^>]+src=["'']([^"'']+)["'']', 'IgnoreCase')
+          foreach ($m in $scriptMatches) {
+            try {
+              $u = [Uri]::new($base, $m.Groups[1].Value).AbsoluteUri
+              Write-Host "Scanning script $u"
+              $texts += (Invoke-WebRequest -UseBasicParsing -Uri $u -TimeoutSec 30).Content
+            } catch {
+              Write-Warning "Unable to scan script: $($_.Exception.Message)"
+            }
+          }
+
+          $urls = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+          foreach ($text in $texts) {
+            foreach ($m in [regex]::Matches($text, 'https?:\\?/\\?/[^"''<>\\s]+', 'IgnoreCase')) {
+              $u = $m.Value -replace '\\/', '/'
+              if ($u -match '(?i)(hypergryph\.com|hycdn\.cn)' -and $u -match '(?i)(launcher|setup|install|download|\.exe|\.zip)') {
+                [void]$urls.Add($u.TrimEnd(')', ']', ',', ';'))
+              }
+            }
+          }
+
+          Write-Host 'Official-domain download-like candidates:'
+          $urls | Sort-Object | ForEach-Object { Write-Host $_ }
+
+          $candidate = $urls |
+            Where-Object { $_ -match '(?i)\.(exe|zip)(\?|$)' } |
+            Sort-Object {
+              if ($_ -match '(?i)launcher') { 0 }
+              elseif ($_ -match '(?i)setup|install') { 1 }
+              else { 2 }
+            } |
+            Select-Object -First 1
+
+          if (-not $candidate) {
+            throw 'Could not discover an official launcher .exe/.zip URL from the official site bundles.'
+          }
+          Write-Host "Selected: $candidate"
+          "url=$candidate" >> $env:GITHUB_OUTPUT
+
+      - name: Download and inspect installer
+        id: download
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = '${{ steps.discover.outputs.url }}'
+          $dest = Join-Path $env:RUNNER_TEMP 'hypergryph-launcher-download'
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dest -TimeoutSec 120
+          $head = Get-Content -Encoding Byte -TotalCount 4 $dest
+          $magic = ($head | ForEach-Object { $_.ToString('X2') }) -join ''
+          Write-Host "Downloaded $((Get-Item $dest).Length) bytes; magic=$magic"
+
+          $installer = $dest
+          if ($magic -eq '504B0304') {
+            $zip = "$dest.zip"
+            Move-Item $dest $zip
+            $dir = Join-Path $env:RUNNER_TEMP 'hypergryph-launcher-unpacked'
+            Expand-Archive -Path $zip -DestinationPath $dir -Force
+            $installer = Get-ChildItem $dir -Recurse -File -Filter *.exe |
+              Sort-Object { if ($_.Name -match '(?i)setup|install|launcher') { 0 } else { 1 } } |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $installer -or -not (Test-Path $installer)) { throw 'No installer executable found.' }
+          $sig = Get-AuthenticodeSignature -LiteralPath $installer
+          Write-Host "Installer=$installer"
+          Write-Host "Signature status=$($sig.Status) signer=$($sig.SignerCertificate.Subject) thumbprint=$($sig.SignerCertificate.Thumbprint)"
+          if ($sig.Status -ne 'Valid') { throw 'Downloaded installer does not have a valid Authenticode signature.' }
+          "installer=$installer" >> $env:GITHUB_OUTPUT
+
+      - name: Install launcher silently
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $installer = '${{ steps.download.outputs.installer }}'
+          $argSets = @(
+            @('/S'),
+            @('/silent'),
+            @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'),
+            @('-s'),
+            @('--silent')
+          )
+          $installed = $false
+          foreach ($args in $argSets) {
+            Write-Host "Trying installer args: $($args -join ' ')"
+            try {
+              $p = Start-Process -FilePath $installer -ArgumentList $args -PassThru
+              if (-not $p.WaitForExit(60000)) {
+                Write-Warning 'Installer did not exit in 60 seconds; killing it.'
+                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+              } else {
+                Write-Host "Installer exit code: $($p.ExitCode)"
+              }
+            } catch {
+              Write-Warning $_.Exception.Message
+            }
+
+            $keys = @(
+              'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e',
+              'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e',
+              'HKCU:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e',
+              'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e'
+            )
+            foreach ($key in $keys) {
+              if (Test-Path $key) {
+                Write-Host "FOUND $key"
+                Get-ItemProperty $key | Format-List DisplayName,InstallLocation,DisplayVersion,UninstallString
+                $installed = $true
+              }
+            }
+            if ($installed) { break }
+          }
+          if (-not $installed) { throw 'Launcher registry entry was not created by any attempted silent-install mode.' }
+
+      - name: Query native registry views explicitly
+        shell: pwsh
+        run: |
+          $id = '33a0a6296a20400d503c59ac0fd6341e'
+          foreach ($root in @('HKCU','HKLM')) {
+            foreach ($view in @('/reg:64','/reg:32')) {
+              Write-Host "===== $root $view ====="
+              & reg.exe query "$root\Software\Microsoft\Windows\CurrentVersion\Uninstall\$id" /v InstallLocation $view
+              Write-Host "exit=$LASTEXITCODE"
+            }
+          }
+
+      - name: Run MaaEnd registry tests
+        shell: pwsh
+        working-directory: agent/go-service
+        run: |
+          go test ./pretask/gamelaunch -run 'TestLauncherPathFromInstallLocation|TestInstalledLauncherMatchesEnvironment' -v
