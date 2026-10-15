@@ -1,0 +1,46 @@
+{
+    "pretask": {
+        "resource": [
+            "官服"
+        ],
+        "controller": [
+            "Win32-Front"
+        ],
+        "exec": "agent/go-service",
+        "args": [
+            "--pretask",
+            "GameLaunch"
+        ],
+        "name": "GameLaunch",
+        "label": "$pretask.GameLaunch.label",
+        "option": [
+            "GameLaunch"
+        ]
+    },
+    "option": {
+        "GameLaunch": {
+            "type": "input",
+            "label": "$option.GameLaunch.label",
+            "inputs": [
+                {
+                    "name": "GamePath",
+                    "label": "$option.GameLaunch.GamePath.label",
+                    "default": "",
+                    "pipeline_type": "string"
+                },
+                {
+                    "name": "LauncherPath",
+                    "label": "$option.GameLaunch.LauncherPath.label",
+                    "default": "",
+                    "pipeline_type": "string"
+                },
+                {
+                    "name": "Arguments",
+                    "label": "$option.GameLaunch.Arguments.label",
+                    "default": "-launcher_lang=zh-cn -launcher_sub_channel=1",
+                    "pipeline_type": "string"
+                }
+            ]
+        }
+    }
+}
