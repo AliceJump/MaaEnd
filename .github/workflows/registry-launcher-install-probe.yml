@@ -25,77 +25,40 @@ jobs:
           go-version-file: agent/go-service/go.mod
           cache: false
 
-      - name: Discover official launcher package
-        id: discover
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $siteUrl = 'https://endfield.hypergryph.com/'
-          $r = Invoke-WebRequest -UseBasicParsing -Uri $siteUrl -TimeoutSec 30
-          $base = [Uri]$siteUrl
-          $scripts = [System.Collections.Generic.List[string]]::new()
-          foreach ($m in [regex]::Matches($r.Content, '(?i)src=["'']([^"'']+\.js[^"'']*)["'']')) {
-            try {
-              $u = [Uri]::new($base, $m.Groups[1].Value).AbsoluteUri
-              if (-not $scripts.Contains($u)) { $scripts.Add($u) }
-            } catch {}
-          }
-          'JavaScript assets:'
-          $scripts | ForEach-Object { $_ }
-          $texts = [System.Collections.Generic.List[string]]::new()
-          $texts.Add($r.Content)
-          foreach ($u in $scripts | Select-Object -First 120) {
-            try {
-              $jr = Invoke-WebRequest -UseBasicParsing -Uri $u -TimeoutSec 30
-              $texts.Add($jr.Content)
-            } catch { "Failed asset: $u :: $_" }
-          }
-          $urls = [System.Collections.Generic.List[string]]::new()
-          foreach ($text in $texts) {
-            $normalized = $text -replace '\\/','/' -replace '\u0026','&'
-            foreach ($m in [regex]::Matches($normalized, 'https?://[^\s"''<>\\]+', 'IgnoreCase')) {
-              try {
-                $uri = [Uri]$m.Value.TrimEnd(')',']','}',',',';')
-                if (($uri.Host -like '*.hycdn.cn' -or $uri.Host -eq 'hycdn.cn' -or $uri.Host -like '*.hypergryph.com' -or $uri.Host -eq 'hypergryph.com') -and -not $urls.Contains($uri.AbsoluteUri)) {
-                  $urls.Add($uri.AbsoluteUri)
-                }
-              } catch {}
-            }
-          }
-          'Interesting official URLs:'
-          $interesting = $urls | Where-Object { $_ -match '(?i)(launcher|download|install|setup|windows|pc|pkg|client)' }
-          $interesting | ForEach-Object { $_ }
-          $candidate = $interesting | Where-Object { $_ -match '(?i)(\.exe|\.zip)(?:\?|$)' } | Select-Object -First 1
-          if (-not $candidate) {
-            'Lines mentioning launcher/download:'
-            foreach ($text in $texts) {
-              [regex]::Matches(($text -replace '\\/','/'), '.{0,180}(?:launcher|download|install|setup).{0,300}', 'IgnoreCase') |
-                Select-Object -First 3 | ForEach-Object { $_.Value }
-            }
-            throw 'No direct official installer/archive URL found; inspect logged metadata.'
-          }
-          "url=$candidate" >> $env:GITHUB_OUTPUT
-
-      - name: Download and verify official package
+      - name: Download and verify official launcher package
         id: package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $url = '${{ steps.discover.outputs.url }}'
-          $ext = [IO.Path]::GetExtension(([Uri]$url).AbsolutePath)
-          $file = Join-Path $env:RUNNER_TEMP ('hypergryph-launcher' + $ext)
-          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -TimeoutSec 120
-          $installer = $file
-          if ($ext -ieq '.zip') {
+          # Current CN Endfield official site launcher endpoint, discovered from its live JS config.
+          $url = 'https://launcher.hypergryph.com/launcher/latest/TKIVNurE23LREGRw?source=official'
+          $file = Join-Path $env:RUNNER_TEMP 'hypergryph-launcher-package.bin'
+          $resp = Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -PassThru -MaximumRedirection 10 -TimeoutSec 120
+          "Final URL: $($resp.BaseResponse.RequestMessage.RequestUri.AbsoluteUri)"
+          Get-Item $file | Format-List FullName,Length
+          $bytes = [IO.File]::ReadAllBytes($file)
+          if ($bytes.Length -lt 2) { throw 'Downloaded package is empty.' }
+          $installer = $null
+          if ($bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
+            $installer = Join-Path $env:RUNNER_TEMP 'HypergryphLauncherSetup.exe'
+            Move-Item -LiteralPath $file -Destination $installer -Force
+          } elseif ($bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B) {
+            $zip = Join-Path $env:RUNNER_TEMP 'HypergryphLauncher.zip'
+            Move-Item -LiteralPath $file -Destination $zip -Force
             $dir = Join-Path $env:RUNNER_TEMP 'launcher-package'
-            Expand-Archive -Path $file -DestinationPath $dir -Force
-            $installer = Get-ChildItem $dir -Recurse -File -Filter *.exe | Sort-Object Length -Descending | Select-Object -First 1 -ExpandProperty FullName
+            Expand-Archive -Path $zip -DestinationPath $dir -Force
+            $installer = Get-ChildItem $dir -Recurse -File -Filter *.exe |
+              Sort-Object Length -Descending | Select-Object -First 1 -ExpandProperty FullName
+          } else {
+            throw ('Unknown package magic: {0:X2} {1:X2}' -f $bytes[0], $bytes[1])
           }
-          if (-not $installer) { throw 'No launcher executable found.' }
+          if (-not $installer) { throw 'No launcher installer executable found.' }
           $sig = Get-AuthenticodeSignature -LiteralPath $installer
-          $sig | Format-List Status,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
+          $sig | Format-List Status,StatusMessage,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
           if ($sig.Status -ne 'Valid') { throw "Installer signature is not valid: $($sig.Status)" }
-          if ($sig.SignerCertificate.Thumbprint -notin @('2B366F397E64A9494A553B70004E8CA1AAE02B9D','FF4AF264C36A27F0C805936708EF8EC67B396225')) { throw "Unexpected signer: $($sig.SignerCertificate.Thumbprint)" }
+          if ($sig.SignerCertificate.Thumbprint -notin @('2B366F397E64A9494A553B70004E8CA1AAE02B9D','FF4AF264C36A27F0C805936708EF8EC67B396225')) {
+            throw "Unexpected signer: $($sig.SignerCertificate.Thumbprint)"
+          }
           "installer=$installer" >> $env:GITHUB_OUTPUT
 
       - name: Install launcher silently
@@ -105,7 +68,7 @@ jobs:
           $installer = '${{ steps.package.outputs.installer }}'
           $key = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e'
           function Has-Key {
-            foreach ($root in @('HKCU','HKLM')) { foreach ($view in @('32','64')) {
+            foreach ($root in @('HKCU','HKLM')) { foreach ($view in @('64','32')) {
               & reg.exe query "$root\$key" /v InstallLocation "/reg:$view" *> $null
               if ($LASTEXITCODE -eq 0) { return $true }
             }}
@@ -116,7 +79,12 @@ jobs:
             "Trying installer args: $($args -join ' ')"
             try {
               $p = Start-Process -FilePath $installer -ArgumentList $args -PassThru
-              if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } else { "Installer exit code: $($p.ExitCode)" }
+              if (-not $p.WaitForExit(120000)) {
+                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+                'Installer timed out and was terminated.'
+              } else {
+                "Installer exit code: $($p.ExitCode)"
+              }
             } catch { Write-Host $_ }
             Start-Sleep -Seconds 3
           }
@@ -131,7 +99,7 @@ jobs:
           $found = $null
           foreach ($root in @('HKCU','HKLM')) { foreach ($view in @('64','32')) {
             "===== $root / reg:$view ====="
-            $out = & reg.exe query "$root\$key" /v InstallLocation "/reg:$view" 2>&1
+            $out = & reg.exe query "$root\$key" "/reg:$view" 2>&1
             $out
             if ($LASTEXITCODE -eq 0 -and -not $found) {
               $line = $out | Where-Object { $_ -match 'InstallLocation' } | Select-Object -First 1
@@ -141,7 +109,9 @@ jobs:
           if (-not $found) { throw 'InstallLocation not found after installation.' }
           $launcher = Join-Path $found 'Launcher.exe'
           if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Launcher.exe missing at $launcher" }
-          Get-AuthenticodeSignature -LiteralPath $launcher | Format-List Status,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
+          $sig = Get-AuthenticodeSignature -LiteralPath $launcher
+          $sig | Format-List Status,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
+          if ($sig.Status -ne 'Valid') { throw "Installed Launcher.exe signature invalid: $($sig.Status)" }
           "launcher=$launcher" >> $env:GITHUB_OUTPUT
 
       - name: Run MaaEnd registry integration test
