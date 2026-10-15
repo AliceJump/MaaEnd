@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -50,7 +49,7 @@ func run(opts Options) error {
 	} else if info.IsDir() {
 		return errors.New("game executable path is a directory")
 	}
-	parent, err := prepareLauncher(opts.LauncherPath)
+	parent, err := prepareLauncher()
 	if err != nil {
 		return err
 	}
@@ -79,14 +78,14 @@ func run(opts Options) error {
 	return nil
 }
 
-func prepareLauncher(path string) (windows.Handle, error) {
+func prepareLauncher() (windows.Handle, error) {
 	parent, err := officialParent()
 	if parent != 0 || err != nil {
 		return parent, err
 	}
-	path = strings.TrimSpace(path)
-	if !filepath.IsAbs(path) || (!strings.EqualFold(filepath.Base(path), "Launcher.exe") && !strings.EqualFold(filepath.Base(path), "Games.exe")) {
-		return 0, errors.New("configure the absolute path to the official Launcher.exe (or Games.exe)")
+	path, err := installedLauncher()
+	if err != nil {
+		return 0, err
 	}
 	fingerprint, err := verifyLauncher(path)
 	if err != nil {
@@ -98,7 +97,7 @@ func prepareLauncher(path string) (windows.Handle, error) {
 		return 0, fmt.Errorf("start official launcher: %w", err)
 	}
 	_ = cmd.Process.Release()
-	log.Info().Str("launcher_path", path).Str("signer_sha1", fingerprint).Msg("started official launcher")
+	log.Info().Str("launcher_path", path).Str("signer_sha1", fingerprint).Msg("started official launcher from installation registration")
 	deadline := time.NewTimer(30 * time.Second)
 	defer deadline.Stop()
 	ticker := time.NewTicker(250 * time.Millisecond)
