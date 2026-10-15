@@ -244,12 +244,6 @@
                     "label": "$option.GameLaunch.GamePath.label",
                     "default": "",
                     "pipeline_type": "string"
-                },
-                {
-                    "name": "LauncherPath",
-                    "label": "$option.GameLaunch.LauncherPath.label",
-                    "default": "",
-                    "pipeline_type": "string"
                 }
             ]
         }
