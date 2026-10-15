@@ -10,10 +10,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Options 是 GameSetting 预任务传入的国服官服游戏和启动器路径。
+// Options 是 GameSetting 预任务传入的国服官服游戏路径。
+// 官方启动器路径由 Windows 安装注册信息自动发现。
 type Options struct {
-	GamePath     string
-	LauncherPath string
+	GamePath string
 }
 
 // Run 在游戏设置完成后启动国服官服；已有游戏进程时不重复启动。
