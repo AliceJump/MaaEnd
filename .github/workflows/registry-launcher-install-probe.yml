@@ -23,54 +23,57 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: agent/go-service/go.mod
+          cache: false
 
       - name: Discover official launcher package
         id: discover
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $allowedHosts = @('hycdn.cn','hypergryph.com')
-          $pages = @('https://endfield.hypergryph.com/')
-          $seen = [System.Collections.Generic.HashSet[string]]::new()
-          $assets = [System.Collections.Generic.List[string]]::new()
-          foreach ($page in $pages) {
-            $r = Invoke-WebRequest -UseBasicParsing -Uri $page -TimeoutSec 30
-            $base = [Uri]$page
-            foreach ($m in [regex]::Matches($r.Content, '(?i)(?:src|href)=["'']([^"'']+)["'']')) {
-              try {
-                $u = [Uri]::new($base, $m.Groups[1].Value).AbsoluteUri
-                if ($seen.Add($u)) { $assets.Add($u) }
-              } catch {}
-            }
+          $home = 'https://endfield.hypergryph.com/'
+          $r = Invoke-WebRequest -UseBasicParsing -Uri $home -TimeoutSec 30
+          $base = [Uri]$home
+          $scripts = [System.Collections.Generic.List[string]]::new()
+          foreach ($m in [regex]::Matches($r.Content, '(?i)src=["'']([^"'']+\.js[^"'']*)["'']')) {
+            try {
+              $u = [Uri]::new($base, $m.Groups[1].Value).AbsoluteUri
+              if (-not $scripts.Contains($u)) { $scripts.Add($u) }
+            } catch {}
           }
+          'JavaScript assets:'
+          $scripts | ForEach-Object { $_ }
           $texts = [System.Collections.Generic.List[string]]::new()
-          foreach ($u in $assets | Select-Object -First 80) {
-            if ($u -notmatch '\.js(?:\?|$)') { continue }
+          $texts.Add($r.Content)
+          foreach ($u in $scripts | Select-Object -First 120) {
             try {
               $jr = Invoke-WebRequest -UseBasicParsing -Uri $u -TimeoutSec 30
               $texts.Add($jr.Content)
-            } catch {}
+            } catch { "Failed asset: $u :: $_" }
           }
-          $all = @((Invoke-WebRequest -UseBasicParsing -Uri $pages[0] -TimeoutSec 30).Content) + $texts
-          $candidates = [System.Collections.Generic.List[string]]::new()
-          foreach ($text in $all) {
-            $normalized = $text -replace '\\/','/'
-            foreach ($m in [regex]::Matches($normalized, 'https?://[^\s"''<>]+?\.(?:zip|exe)(?:\?[^\s"''<>]*)?', 'IgnoreCase')) {
+          $urls = [System.Collections.Generic.List[string]]::new()
+          foreach ($text in $texts) {
+            $normalized = $text -replace '\\/','/' -replace '\u0026','&'
+            foreach ($m in [regex]::Matches($normalized, 'https?://[^\s"''<>\\]+', 'IgnoreCase')) {
               try {
-                $uri = [Uri]$m.Value
-                $ok = $false
-                foreach ($h in $allowedHosts) {
-                  if ($uri.Host -eq $h -or $uri.Host.EndsWith('.' + $h)) { $ok = $true; break }
+                $uri = [Uri]$m.Value.TrimEnd(')',']','}',',',';')
+                if (($uri.Host -like '*.hycdn.cn' -or $uri.Host -eq 'hycdn.cn' -or $uri.Host -like '*.hypergryph.com' -or $uri.Host -eq 'hypergryph.com') -and -not $urls.Contains($uri.AbsoluteUri)) {
+                  $urls.Add($uri.AbsoluteUri)
                 }
-                if ($ok -and -not $candidates.Contains($uri.AbsoluteUri)) { $candidates.Add($uri.AbsoluteUri) }
               } catch {}
             }
           }
-          'Official package candidates:'
-          $candidates | ForEach-Object { $_ }
-          $candidate = $candidates | Where-Object { $_ -match '(?i)(launcher|setup|install)' } | Select-Object -First 1
-          if (-not $candidate) { $candidate = $candidates | Select-Object -First 1 }
-          if (-not $candidate) { throw 'No official launcher installer/archive URL found in current Endfield site assets.' }
+          'Interesting official URLs:'
+          $interesting = $urls | Where-Object { $_ -match '(?i)(launcher|download|install|setup|windows|pc|pkg|client)' }
+          $interesting | ForEach-Object { $_ }
+          $candidate = $interesting | Where-Object { $_ -match '(?i)(\.exe|\.zip)(?:\?|$)' } | Select-Object -First 1
+          if (-not $candidate) {
+            'Lines mentioning launcher/download:'
+            foreach ($text in $texts) {
+              [regex]::Matches(($text -replace '\\/','/'), '.{0,180}(?:launcher|download|install|setup).{0,300}', 'IgnoreCase') |
+                Select-Object -First 3 | ForEach-Object { $_.Value }
+            }
+            throw 'No direct official installer/archive URL found; inspect logged metadata.'
+          }
           "url=$candidate" >> $env:GITHUB_OUTPUT
 
       - name: Download and verify official package
@@ -80,24 +83,19 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $url = '${{ steps.discover.outputs.url }}'
           $ext = [IO.Path]::GetExtension(([Uri]$url).AbsolutePath)
-          if (-not $ext) { $ext = '.bin' }
           $file = Join-Path $env:RUNNER_TEMP ('hypergryph-launcher' + $ext)
           Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -TimeoutSec 120
-          Get-Item $file | Format-List FullName,Length
           $installer = $file
           if ($ext -ieq '.zip') {
             $dir = Join-Path $env:RUNNER_TEMP 'launcher-package'
             Expand-Archive -Path $file -DestinationPath $dir -Force
-            $installer = Get-ChildItem $dir -Recurse -File -Filter *.exe |
-              Sort-Object Length -Descending | Select-Object -First 1 -ExpandProperty FullName
-            if (-not $installer) { throw 'No executable found inside launcher archive.' }
+            $installer = Get-ChildItem $dir -Recurse -File -Filter *.exe | Sort-Object Length -Descending | Select-Object -First 1 -ExpandProperty FullName
           }
+          if (-not $installer) { throw 'No launcher executable found.' }
           $sig = Get-AuthenticodeSignature -LiteralPath $installer
-          $sig | Format-List Status,StatusMessage,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
+          $sig | Format-List Status,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
           if ($sig.Status -ne 'Valid') { throw "Installer signature is not valid: $($sig.Status)" }
-          if ($sig.SignerCertificate.Thumbprint -notin @('2B366F397E64A9494A553B70004E8CA1AAE02B9D','FF4AF264C36A27F0C805936708EF8EC67B396225')) {
-            throw "Unexpected installer signer thumbprint: $($sig.SignerCertificate.Thumbprint)"
-          }
+          if ($sig.SignerCertificate.Thumbprint -notin @('2B366F397E64A9494A553B70004E8CA1AAE02B9D','FF4AF264C36A27F0C805936708EF8EC67B396225')) { throw "Unexpected signer: $($sig.SignerCertificate.Thumbprint)" }
           "installer=$installer" >> $env:GITHUB_OUTPUT
 
       - name: Install launcher silently
@@ -107,29 +105,18 @@ jobs:
           $installer = '${{ steps.package.outputs.installer }}'
           $key = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e'
           function Has-Key {
-            foreach ($root in @('HKCU','HKLM')) {
-              foreach ($view in @('32','64')) {
-                & reg.exe query "$root\$key" /v InstallLocation "/reg:$view" *> $null
-                if ($LASTEXITCODE -eq 0) { return $true }
-              }
-            }
+            foreach ($root in @('HKCU','HKLM')) { foreach ($view in @('32','64')) {
+              & reg.exe query "$root\$key" /v InstallLocation "/reg:$view" *> $null
+              if ($LASTEXITCODE -eq 0) { return $true }
+            }}
             return $false
           }
-          $argSets = @(
-            @('/S'),
-            @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'),
-            @('/quiet','/norestart')
-          )
-          foreach ($args in $argSets) {
+          foreach ($args in @(@('/S'),@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'),@('/quiet','/norestart'))) {
             if (Has-Key) { break }
             "Trying installer args: $($args -join ' ')"
             try {
               $p = Start-Process -FilePath $installer -ArgumentList $args -PassThru
-              if (-not $p.WaitForExit(120000)) {
-                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-              } else {
-                "Installer exit code: $($p.ExitCode)"
-              }
+              if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } else { "Installer exit code: $($p.ExitCode)" }
             } catch { Write-Host $_ }
             Start-Sleep -Seconds 3
           }
@@ -142,22 +129,19 @@ jobs:
           $ErrorActionPreference = 'Continue'
           $key = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\33a0a6296a20400d503c59ac0fd6341e'
           $found = $null
-          foreach ($root in @('HKCU','HKLM')) {
-            foreach ($view in @('64','32')) {
-              "===== $root / reg:$view ====="
-              $out = & reg.exe query "$root\$key" /v InstallLocation "/reg:$view" 2>&1
-              $out
-              if ($LASTEXITCODE -eq 0 -and -not $found) {
-                $line = $out | Where-Object { $_ -match 'InstallLocation' } | Select-Object -First 1
-                if ($line -match 'REG_\w+\s+(.+)$') { $found = $Matches[1].Trim() }
-              }
+          foreach ($root in @('HKCU','HKLM')) { foreach ($view in @('64','32')) {
+            "===== $root / reg:$view ====="
+            $out = & reg.exe query "$root\$key" /v InstallLocation "/reg:$view" 2>&1
+            $out
+            if ($LASTEXITCODE -eq 0 -and -not $found) {
+              $line = $out | Where-Object { $_ -match 'InstallLocation' } | Select-Object -First 1
+              if ($line -match 'REG_\w+\s+(.+)$') { $found = $Matches[1].Trim() }
             }
-          }
+          }}
           if (-not $found) { throw 'InstallLocation not found after installation.' }
           $launcher = Join-Path $found 'Launcher.exe'
           if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Launcher.exe missing at $launcher" }
-          $sig = Get-AuthenticodeSignature -LiteralPath $launcher
-          $sig | Format-List Status,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
+          Get-AuthenticodeSignature -LiteralPath $launcher | Format-List Status,@{n='Subject';e={$_.SignerCertificate.Subject}},@{n='Thumbprint';e={$_.SignerCertificate.Thumbprint}}
           "launcher=$launcher" >> $env:GITHUB_OUTPUT
 
       - name: Run MaaEnd registry integration test
@@ -165,5 +149,4 @@ jobs:
         working-directory: agent/go-service
         env:
           MAAEND_TEST_LAUNCHER: ${{ steps.registry.outputs.launcher }}
-        run: |
-          go test ./pretask/gamelaunch -run 'TestLauncherPathFromInstallLocation|TestInstalledOfficialLauncherRegistration|TestOfficialLauncherSignature' -v
+        run: go test ./pretask/gamelaunch -run 'TestLauncherPathFromInstallLocation|TestInstalledOfficialLauncherRegistration|TestOfficialLauncherSignature' -v
