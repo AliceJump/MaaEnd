@@ -11,12 +11,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const defaultArguments = "-launcher_lang=zh-cn -launcher_sub_channel=1"
-
 type launchOptions struct {
 	GamePath     string
 	LauncherPath string
-	Arguments    string
 }
 
 // Run 在连接 Win32 控制器前启动国服官服；已有游戏进程时不重复启动。
@@ -34,7 +31,7 @@ func Run(args []string) bool {
 }
 
 func parseOptions(args []string) (launchOptions, error) {
-	opts := struct{ GameLaunch launchOptions }{GameLaunch: launchOptions{Arguments: defaultArguments}}
+	var opts struct{ GameLaunch launchOptions }
 	if len(args) > 0 {
 		if err := json.Unmarshal([]byte(args[len(args)-1]), &opts); err != nil {
 			return launchOptions{}, fmt.Errorf("parse GameLaunch options: %w", err)

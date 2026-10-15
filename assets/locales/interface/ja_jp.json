@@ -1462,7 +1462,6 @@
     "option.FastCollect.description": "手掛かりと製造物を素早く回収します。",
     "option.FastCollect.label": "クイック回収",
     "option.FlawlessEssence.label": "🟨純粋基質",
-    "option.GameLaunch.Arguments.label": "ゲーム起動引数",
     "option.GameLaunch.GamePath.label": "ゲーム実行ファイル（Endfield.exe）",
     "option.GameLaunch.LauncherPath.label": "公式ランチャー（Launcher.exe）",
     "option.GameLaunch.label": "ゲーム起動設定",

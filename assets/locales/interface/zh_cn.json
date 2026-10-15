@@ -1462,7 +1462,6 @@
     "option.FastCollect.description": "快速收取线索和产物",
     "option.FastCollect.label": "快速收取",
     "option.FlawlessEssence.label": "🟨无瑕基质",
-    "option.GameLaunch.Arguments.label": "游戏启动参数",
     "option.GameLaunch.GamePath.label": "游戏程序（Endfield.exe）",
     "option.GameLaunch.LauncherPath.label": "官方启动器（Launcher.exe）",
     "option.GameLaunch.label": "游戏启动配置",

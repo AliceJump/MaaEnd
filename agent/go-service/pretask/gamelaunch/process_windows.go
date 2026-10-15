@@ -73,13 +73,13 @@ func officialParent() (windows.Handle, error) {
 }
 
 // createGame 使用原生 STARTUPINFOEXW，既不经过 shell，也不向官方进程复制标准输出句柄。
-func createGame(path, arguments string, parent windows.Handle) (windows.ProcessInformation, error) {
+func createGame(path string, parent windows.Handle) (windows.ProcessInformation, error) {
 	var process windows.ProcessInformation
 	app, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return process, err
 	}
-	command, err := windows.UTF16PtrFromString(strings.TrimSpace(windows.EscapeArg(path) + " " + arguments))
+	command, err := windows.UTF16PtrFromString(windows.EscapeArg(path))
 	if err != nil {
 		return process, err
 	}

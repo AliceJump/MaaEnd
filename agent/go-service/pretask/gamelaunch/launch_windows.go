@@ -67,14 +67,14 @@ func run(args []string) error {
 		return nil
 	}
 	logs := captureSDKLogs()
-	process, err := createGame(game, opts.Arguments, parent)
+	process, err := createGame(game, parent)
 	if err != nil {
 		return fmt.Errorf("CreateProcessW: %w", err)
 	}
 	defer windows.CloseHandle(process.Process)
 	windows.CloseHandle(process.Thread)
 	log.Info().Uint32("game_pid", process.ProcessId).Str("game_path", game).
-		Str("arguments", opts.Arguments).Msg("created game with official launcher parent")
+		Msg("created game with official launcher parent")
 	if err := waitForGame(process); err != nil {
 		logs.report()
 		return err
@@ -96,7 +96,7 @@ func prepareLauncher(path string) (windows.Handle, error) {
 	if err != nil {
 		return 0, err
 	}
-	cmd := exec.Command(path, "--game=Endfield", "--reason=4")
+	cmd := exec.Command(path)
 	cmd.Dir = filepath.Dir(path)
 	if err := cmd.Start(); err != nil {
 		return 0, fmt.Errorf("start official launcher: %w", err)

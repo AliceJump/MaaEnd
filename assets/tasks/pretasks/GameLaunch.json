@@ -33,12 +33,6 @@
                     "label": "$option.GameLaunch.LauncherPath.label",
                     "default": "",
                     "pipeline_type": "string"
-                },
-                {
-                    "name": "Arguments",
-                    "label": "$option.GameLaunch.Arguments.label",
-                    "default": "-launcher_lang=zh-cn -launcher_sub_channel=1",
-                    "pipeline_type": "string"
                 }
             ]
         }
