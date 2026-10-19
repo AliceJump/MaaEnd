@@ -1,12 +1,15 @@
 # Development Manual - EnvironmentMonitoring Maintenance Documentation
 
-This document explains the Pipeline organization, route data, terminal grouping, automatic generation mechanism, and integration method for new observation points for the `EnvironmentMonitoring` task.
+This document explains the Pipeline organization, route data, terminal grouping, automatic generation mechanism, and integration method for new observation points for the `EnvironmentMonitoring` task.  
+Last updated: 2026-10-19
 
 The core characteristic of Environment Monitoring is **"Data-Driven + Template Batch Generation"**: The Pipeline JSON corresponding to each observation point is not manually written but is batch-rendered into `assets/resource/pipeline/EnvironmentMonitoring/` using the [`@joebao/maa-pipeline-generate`](https://www.npmjs.com/package/@joebao/maa-pipeline-generate) tool, combining template/route configurations from `tools/pipeline-generate/EnvironmentMonitoring/` and `tools/zmdmap/data/environment_monitoring.json`. The focus of maintenance work is on **generation configuration and zmdmap compact game data**, not manually editing JSON.
 
 > [!WARNING]
 >
 > `assets/resource/pipeline/EnvironmentMonitoring/{Station}/*.json` and `assets/resource/pipeline/EnvironmentMonitoring/Terminals.json` are **generated artifacts**. Manually modifying these files will be overwritten during the next regeneration. All maintenance should be done in the generation configuration under `tools/pipeline-generate/EnvironmentMonitoring/`, or by updating the zmdmap compact game data via `pnpm fetch:zmdmap`.
+
+The repository-root [`CODEOWNERS`](../../../../CODEOWNERS) specifies this module's code review owner. GitHub can automatically request a review for matching changes; whether approval is required depends on the target branch's protection rules.
 
 ## Overview
 
