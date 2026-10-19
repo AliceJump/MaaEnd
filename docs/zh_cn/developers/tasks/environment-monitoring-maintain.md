@@ -1,12 +1,15 @@
 # 开发手册 - EnvironmentMonitoring 维护文档
 
-本文说明 `EnvironmentMonitoring`（环境监测）任务的 Pipeline 组织、路线数据、终端分组、自动生成机制及新观察点的接入方式。
+本文说明 `EnvironmentMonitoring`（环境监测）任务的 Pipeline 组织、路线数据、终端分组、自动生成机制及新观察点的接入方式。  
+更新日期：2026-10-19
 
 环境监测的核心特点是 **「数据驱动 + 模板批量生成」**：每个观察点对应的 Pipeline JSON 不直接手写，而是通过 [`@joebao/maa-pipeline-generate`](https://www.npmjs.com/package/@joebao/maa-pipeline-generate) 工具，将 `tools/pipeline-generate/EnvironmentMonitoring/` 下的模板/路线配置和 `tools/zmdmap/data/environment_monitoring.json` 批量渲染到 `assets/resource/pipeline/EnvironmentMonitoring/` 中。维护工作的重心在 **生成配置与 zmdmap 精简游戏数据**，而不是手改 JSON。
 
 > [!WARNING]
 >
 > `assets/resource/pipeline/EnvironmentMonitoring/{Station}/*.json` 与 `assets/resource/pipeline/EnvironmentMonitoring/Terminals.json` 都是 **生成产物**。手改这些文件会在下次重新生成时被覆盖。所有维护都应该改 `tools/pipeline-generate/EnvironmentMonitoring/` 下的生成配置，或通过 `pnpm fetch:zmdmap` 更新 zmdmap 精简游戏数据。
+
+本模块的代码审阅负责人由仓库根目录的 [`CODEOWNERS`](../../../../CODEOWNERS) 指定。修改本模块匹配的文件时，GitHub 会尝试自动请求该负责人审阅；是否强制获得批准由目标分支的保护规则决定。
 
 ## 概览
 
